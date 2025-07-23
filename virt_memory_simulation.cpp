@@ -1,62 +1,41 @@
+// Build: g++ -O2 -std=c++20 virt_memory_simulation.cpp -o task1
+// Run  : ./task1    (watch top/htop/vmstat in another window)
+
+#include <chrono>
 #include <iostream>
 #include <vector>
-#include <chrono>
 #include <random>
+#include <new>
 
-constexpr size_t GB = 1024 * 1024 * 1024;
-constexpr size_t MEMORY_SIZE = 2 * GB;
-constexpr size_t PAGE_SIZE = 4096;
+constexpr size_t GiB = 1ull << 30;
+constexpr size_t MEMORY_SIZE = 2 * GiB;
+constexpr size_t PAGE_SIZE   = 4096;
 
-void sequential_access(char* memory, size_t size) {
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < size; i += PAGE_SIZE) {
-        memory[i] = static_cast<char>(i % 256);
-    }
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "Sequential access time: "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-              << " ms\n";
+void touch(char* mem, const std::vector<size_t>& order, const char* tag)
+{
+    const auto t0 = std::chrono::high_resolution_clock::now();
+    for (size_t idx : order) mem[idx] = static_cast<char>(idx);
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    std::cout << tag << " access: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
+              << " ms\n";
 }
 
-void random_access(char* memory, size_t size) {
-    std::vector<size_t> indices(size / PAGE_SIZE);
-    for (size_t i = 0; i < indices.size(); ++i) {
-        indices[i] = i * PAGE_SIZE;
-    }
+int main()
+{
+    std::cout << "Allocating 2 GiB (may exceed RAM)…\n";
+    char* mem = new (std::nothrow) char[MEMORY_SIZE];
+    if (!mem) { std::cerr << "Allocation failed\n"; return 1; }
 
-    std::shuffle(indices.begin(), indices.end(), std::mt19937{std::random_device{}()});
+    std::vector<size_t> sequential(MEMORY_SIZE / PAGE_SIZE);
+    for (size_t i = 0; i < sequential.size(); ++i) sequential[i] = i * PAGE_SIZE;
 
-    auto start = std::chrono::high_resolution_clock::now();
+    std::vector<size_t> random = sequential;
+    std::shuffle(random.begin(), random.end(), std::mt19937{std::random_device{}()});
 
-    for (size_t idx : indices) {
-        memory[idx] = static_cast<char>(idx % 256);
-    }
+    std::cout << "→ Watch your system monitor now (top/htop)…\n";
+    touch(mem, sequential, "Sequential");
+    touch(mem, random,     "Random"    );
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "Random access time: "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-              << " ms\n";
+    delete[] mem;
 }
-
-int main() {
-    std::cout << "Allocating 2GB memory...\n";
-    char* memory = new (std::nothrow) char[MEMORY_SIZE];
-
-    if (!memory) {
-        std::cerr << "Memory allocation failed!\n";
-        return 1;
-    }
-
-    std::cout << "Starting sequential access...\n";
-    sequential_access(memory, MEMORY_SIZE);
-
-    std::cout << "Starting random access...\n";
-    random_access(memory, MEMORY_SIZE);
-
-    delete[] memory;
-    return 0;
-}
-
-
