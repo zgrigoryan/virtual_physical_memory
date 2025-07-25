@@ -6,6 +6,7 @@
 #include <vector>
 #include <random>
 #include <new>
+#include <algorithm>
 
 constexpr size_t GiB = 1ull << 30;
 constexpr size_t MEMORY_SIZE = 2 * GiB;
